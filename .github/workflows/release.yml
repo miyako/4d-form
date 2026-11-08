@@ -1,0 +1,54 @@
+name: Release macOS PNG CLI
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag (must match CLI and manifest version)
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+      - run: swift test
+      - run: bash scripts/build-macos.sh
+      - name: Check release tag
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          test "$TAG" = "$(python3 -c 'import json; print(json.load(open("release.json"))["tag"])')"
+          test "$(dist/fourdform --version)" = "fourdform ${TAG#v}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: |
+            dist/fourdform-macos-universal.tar.xz
+            dist/SHA256SUMS
+            dist/release.json
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: artifacts
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          gh release create "$TAG" --verify-tag --title "$TAG" \
+            --notes "Standalone macOS universal .4DForm to PNG CLI. Ad-hoc signed; not notarized. Windows is handover-only. See README and docs/WINDOWS-HANDOVER.md." \
+            artifacts/fourdform-macos-universal.tar.xz artifacts/SHA256SUMS artifacts/release.json

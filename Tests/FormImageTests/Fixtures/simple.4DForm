@@ -1,0 +1,9 @@
+{
+  "width": 240,
+  "height": 160,
+  "pages": [
+    {"objects": {"Common": {"type": "rectangle", "left": 10, "top": 10, "width": 80, "height": 30, "fill": "#ff0000", "stroke": "#ff0000"}}},
+    {"objects": {"Label": {"type": "text", "left": 10, "top": 60, "width": 180, "height": 30, "text": "Form preview"}}},
+    {"objects": {"Other": {"type": "rectangle", "left": 100, "top": 100, "width": 60, "height": 40, "fill": "#00ff00", "stroke": "#00ff00"}}}
+  ]
+}

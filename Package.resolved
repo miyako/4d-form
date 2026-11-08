@@ -1,0 +1,13 @@
+{
+  "pins" : [
+    {
+      "identity" : "4d-ql",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/miyako/4d-ql.git",
+      "state" : {
+        "revision" : "2be2142b1efdba4e1ad4f28e5b9fc0eaf6ddc61b"
+      }
+    }
+  ],
+  "version" : 2
+}

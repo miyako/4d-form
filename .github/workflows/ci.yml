@@ -1,0 +1,24 @@
+name: macOS PNG CLI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  png:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        run: swift test
+      - name: Build universal CLI and verify PNG corpus
+        run: bash scripts/build-macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fourdform-macos-universal
+          path: |
+            dist/fourdform-macos-universal.tar.xz
+            dist/SHA256SUMS
+            dist/release.json
+          if-no-files-found: error

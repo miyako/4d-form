@@ -7,7 +7,7 @@ let package = Package(
     products: [.executable(name: "fourdform", targets: ["FourDFormCLI"])],
     dependencies: [
         .package(url: "https://github.com/miyako/4d-ql.git",
-                 revision: "31e7608805cd71c19590780a6f9c91b9c506af4b")
+                 revision: "42580e8c0d1c1c5506d349c4c2e071c40fc0e02c")
     ],
     targets: [
         .target(name: "FormImage",

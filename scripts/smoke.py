@@ -130,11 +130,17 @@ def main():
         assert not (work / "failed.png").exists()
         run("missing.4DForm", status=1)
         (work / "malformed.4DForm").write_text("{")
-        run("malformed.4DForm", status=1)
+        malformed = run("malformed.4DForm", status=1)
+        assert "JSON" in malformed.stderr or "Expected" in malformed.stderr
         for args in (("--scale", "nan"), ("--scale", "5"), ("--max-dimension", "4097"),
                      ("--theme", "windows"), ("--page", "-1"), ("--output", "simple.4DForm")):
             run("simple.4DForm", *args, status=2)
         run("simple.4DForm", "-o", "missing-directory/out.png", status=1)
+        (work / "retained.png").write_bytes(b"prior output")
+        run("malformed.4DForm", "-o", "retained.png", status=1)
+        assert (work / "retained.png").read_bytes() == b"prior output"
+        (work / "input-alias.png").symlink_to(work / "simple.4DForm")
+        run("simple.4DForm", "-o", "input-alias.png", status=2)
         (work / "forced.4DForm").write_text(json.dumps({"colorScheme": "dark", "pages": [{"objects": {}}, {"objects": {}}]}))
         run("forced.4DForm", "--theme", "classic-light", status=1)
         run("forced.4DForm", "--theme", "classic-dark", "-o", "forced.png")

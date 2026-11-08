@@ -56,5 +56,12 @@ final class FormImageTests: XCTestCase {
                                                     maximum: 2048, timeout: 0)) { error in
             XCTAssertTrue(error.localizedDescription.contains("timed out"))
         }
+        let brokenImage = """
+        <html><body><div class="form-preview"><div class="form-appearance">
+        <div class="form-page"><div class="form-scroll">
+        <svg width="80" height="80"><image href="data:image/png;base64,broken"/></svg>
+        </div></div></div></div></body></html>
+        """
+        XCTAssertThrowsError(try MacRasterizer().png(html: brokenImage, scale: 1, maximum: 2048))
     }
 }

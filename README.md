@@ -62,7 +62,7 @@ does not maintain a second vendored build of the renderer.
 | `--scale` | `1` | Pixels per form point, finite range 0.1–4 |
 | `--max-dimension` | `2048` | Proportional fit, integer range 1–4096 pixels |
 | `--` | — | End options; permits a filename starting with `-` |
-| `--help`, `--version` | — | Metadata only; no rendering |
+| `--help`, `--version`, `--license` | — | Metadata or embedded product/shared-library MIT notice; no rendering |
 
 The output width/height are the ceiling of the shared canvas dimensions times
 `min(scale, maxDimension / max(canvasWidth, canvasHeight))`, at least one pixel

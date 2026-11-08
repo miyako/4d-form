@@ -5,6 +5,8 @@
 2026 Keisuke Miyako. It supplies the `FourDFileKit` and `FourDRender` products.
 No parser, calibrated geometry, font layout, CSS palette or control SVG
 implementation is copied into this repository.
+The executable embeds the full product/shared-library MIT notice, available via
+`fourdform --license`, so the root-only binary archive carries its license too.
 
 The public boundary is `FormRenderer.render(url:preferredLanguages:options:)`.
 It returns self-contained HTML/SVG plus the version-1 `FormRenderDocument`

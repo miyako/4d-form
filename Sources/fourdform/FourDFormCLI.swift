@@ -19,6 +19,10 @@ func fail(_ error: Error, status: Int32) -> Never {
             print("fourdform \(ImageCommand.version)")
             exit(0)
         }
+        if arguments == ["--license"] {
+            print(ImageCommand.license)
+            exit(0)
+        }
         let command: ImageCommand
         do { command = try ImageCommand(arguments) }
         catch { fail(error, status: 2) }

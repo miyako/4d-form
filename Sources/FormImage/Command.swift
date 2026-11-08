@@ -26,6 +26,30 @@ public struct ImageSize: Equatable {
 
 public struct ImageCommand {
     public static let version = "0.1.0"
+    public static let license = """
+    fourdform and its shared FourDFileKit/FourDRender libraries
+    MIT License
+
+    Copyright (c) 2026 Keisuke Miyako
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+    """
     public static let usage = """
     usage: fourdform [options] [--] path.4DForm
       --output, -o PATH      PNG destination (default: INPUT.preview.png)
@@ -38,6 +62,7 @@ public struct ImageCommand {
       --max-dimension N      Fit proportionally within 1...4096 pixels (default: 2048)
       --help, -h             Show help
       --version              Show version
+      --license              Show embedded product/shared-library MIT notice
     Static macOS reference preview; no 4D or Quick Look installation required.
     Exit status: 0 success/help, 2 usage error, 1 analysis/render/write error.
     """

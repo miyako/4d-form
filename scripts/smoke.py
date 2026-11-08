@@ -79,6 +79,8 @@ def main():
     assert version == "fourdform " + manifest["version"]
     assert manifest["tag"] == "v" + manifest["version"]
     assert "--max-dimension" in subprocess.check_output([str(executable), "--help"], text=True)
+    license_text = subprocess.check_output([str(executable), "--license"], text=True)
+    assert "MIT License" in license_text and "FourDFileKit/FourDRender" in license_text
     with tempfile.TemporaryDirectory(prefix="fourdform-smoke-") as name:
         work = Path(name)
         binary = work / "fourdform"

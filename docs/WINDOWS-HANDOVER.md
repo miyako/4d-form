@@ -1,76 +1,74 @@
-# Windows implementation handover
+# Windows implementation notes
 
-## Delivered and deliberately absent
+`fourdform.exe` renders Windows reference previews of a `.4DForm` with the same
+CLI contract as macOS: flags, range validation, exit codes, atomic output,
+deterministic theme/page/language selection, bounded pixel dimensions and the
+selected canvas only. The macOS output is a reference for macOS, not evidence
+of Windows behavior, and vice versa.
 
-The `fourdform` macOS CLI produces bounded, decoded PNGs using a new
-`MacRasterizer` adapter and shared 4d-ql libraries. Windows is **not** supported,
-built or runtime-tested. Do not publish a Windows asset until the adapters,
-native calibration and Windows acceptance tests below exist. The macOS result
-is a reference, not evidence of Windows control, font or palette behavior.
+## Division of work
 
-## Reusable boundary and Apple dependencies
+| Layer | Where | Windows implementation |
+|---|---|---|
+| Parser, typed IR, dependencies | upstream `FourDFileKit` (4d-ql) | Portable file, picture and typography adapters. `FormRenderer.analyze/render` take `platform: .windows`, which loads `styleSheets.css` + `styleSheets_windows.css` and reports `referencePlatform` `Windows`. |
+| Controls, palettes, metrics | upstream `FourDRender` | `FormTheme.windowsClassic` (light only), `.fluentLight`, `.fluentDark`, calibrated against licensed 4D 21 on Windows 11. See the upstream renderer docs for the calibration record. No copy of the calibrated renderer lives here. |
+| CLI | `Sources/FormImage/Command.swift` | Host-platform theme table: `classic`, `fluent-light`, `fluent-dark`; default `classic`, or `fluent-dark` when the form forces dark. macOS names (`classic-light`, `liquid-glass-*`, ...) are rejected, not aliased. |
+| DOM adapter | `Sources/FormImage/CanvasScripts.swift` | Shared by both rasterizers: selects the upstream canvas, removes report chrome, waits for fonts and images, returns canvas size from the upstream SVG. |
+| Raster | `Sources/FormImage/WindowsRasterizer.swift`, `Sources/CWebView2Raster/` | Microsoft Edge WebView2 (Evergreen runtime), described below. |
+| Packaging | `scripts/build-windows.ps1`, CI/release workflows, `release.json` | `fourdform-windows-x64.zip` and `fourdform-windows-arm64.zip`, each built and smoke-tested on a native runner. |
 
-| Layer | Reuse / work required |
-|---|---|
-| CLI contract | Reuse flags, range validation, exit codes, atomic output and deterministic theme/page/language selection from `Sources/FormImage/Command.swift`. Its current import of Apple-dependent library products prevents a Windows build today. |
-| Typed IR | Preserve `FormRenderDocument` schema 1, ordered page/object arrays, nested static subforms, warnings and resource provenance. `referencePlatform` currently says `macOS`: introduce an explicit Windows platform boundary upstream, do not relabel these styles. |
-| Parser/dependencies | Reuse form JSON/JSON pointers, static CSS, XLIFF, inheritance, subform resolution and passive picture safety logic in upstream `FourDFileKit`; replace platform imports/operations first. `ByteSource` currently uses POSIX file access. |
-| Typography | `FormTextLayout` and `DiagramTypography` use CoreText; implement equivalent UTF-16/grapheme-safe measurement, alignment, wrapping, clipping and font fallback with DirectWrite or another measured Windows backend. |
-| Colors/controls | `FormPreviewRenderer` imports AppKit and encodes calibrated macOS Classic/Liquid Glass metrics and palettes. Add an explicit reference-platform model and Windows styling upstream. Do not copy and diverge this renderer. |
-| Pictures | AppKit/ImageIO/UTType helpers require Windows image decode/encode, explicit bounds, passive SVG sanitization and safe URI adapters (e.g. WIC plus a measured SVG path). |
-| Raster | `Sources/FormImage/MacRasterizer.swift` is wholly Apple-only. Implement a Windows adapter accepting the agreed self-contained HTML/SVG and returning PNG bytes or an explicit error. WebView2 is a candidate, not a validated choice or currently provisioned dependency. |
-| Packaging | Add real MSVC/Windows SDK builds and tested x64/arm64 release recipes only after implementation. Current `release.json` intentionally lists macOS only. Coordinate stable asset names/checksums with `miyako/skills`. |
+## WebView2 raster adapter
 
-## Toolchain and implementation sequence
+- **Deployment:** the system Evergreen WebView2 Runtime; the pinned SDK
+  (`scripts/fetch-webview2.ps1`) contributes headers and the static loader only.
+  A missing runtime is an explicit error.
+- **Isolation:** each render creates a hidden, off-screen tool window, its own
+  STA COM apartment and a fresh `%TEMP%\fourdform-webview2-{GUID}` profile.
+  The profile is deleted after the browser process exits. Scripts run, but
+  dialogs, context menus, the DevTools UI, host objects, web messages, autofill,
+  status bar and zoom are disabled.
+- **No network:** the HTML is served from memory at
+  `https://fourdform.invalid/form.html` through `WebResourceRequested`; every
+  other request is answered 403, and the browser runs with host-resolver rules
+  that map every host to `NOTFOUND`, no proxy and background networking off.
+  This also avoids the 2 MB `NavigateToString` limit.
+- **Paint determinism:** `--force-color-profile=srgb`, software paint, grayscale
+  anti-aliasing (`--disable-lcd-text`), rasterization scale 1, no monitor-DPI
+  tracking, light `prefers-color-scheme` and reduced motion. The theme comes
+  from the upstream initial theme classes, never the system theme.
+- **Readiness, not sleeps:** `NavigationCompleted`, then `Runtime.evaluate`
+  awaits the shared prepare script (fonts, images, layout). The
+  device-metrics override and window bounds are set to the exact `ImageSize`,
+  then two animation frames are awaited before `Page.captureScreenshot` clips
+  the canvas.
+- **Output:** the capture is decoded with WIC, resampled only if the device
+  disagrees with the requested size, and re-encoded as an 8-bit RGBA PNG of
+  exactly the requested dimensions.
+- **Failures:** runtime/controller creation, browser process failure,
+  navigation errors, DevTools errors and script exceptions all propagate as
+  messages. The whole stage has a 30-second deadline, enforced by a
+  `MsgWaitForMultipleObjectsEx` message pump.
 
-1. Clone this repository on Windows and read its exact `Package.resolved` QL
-   revision. Review upstream `Sources/FourDFileKit/Form`, `ByteSource`,
-   `Sources/FourDRender/{FormRenderer,FormPreviewRenderer,FormTextLayout}.swift`
-   and upstream `docs/{FORM-RENDERER,WINDOWS-HANDOVER}.md`. Install the official
-   Swift Windows toolchain, compatible Visual Studio C++ build tools and Windows
-   SDK. The current package is macOS-only; an unmodified Windows build is not a
-   supported smoke test.
-1. Add platform-conditioned filesystem, resource/image and typography adapters
-   **in the shared QL repository**, keeping its macOS defaults and tests intact.
-   Split Apple-only targets if needed. Keep the Codable typed IR portable; use
-   an explicit reference platform and schema migration when required.
-1. Implement a Windows raster backend here with an equivalent contract:
-   selected canvas only, fonts/passive images ready before capture, no external
-   network or form code execution, 30-second deadline, process failure
-   propagation, exact bounded pixel dimensions and sRGB PNG encoding. For
-   WebView2, document Evergreen versus bundled-runtime deployment, COM
-   initialization/message pumping, hidden-window lifecycle, paint completion,
-   profile cleanup and screenshot scaling. Do not use an arbitrary sleep.
-1. Calibrate native Windows controls using a licensed full 4D installation as a
-   **development-only reference**. Document OS, 4D version, display scale,
-   theme/high-contrast setting and fonts. Consult canonical 4D skills and create
-   `Project/Sources/dependencies.json` before launching a reference project.
-   Tool4D is not evidence for unsupported native window/control behavior.
-1. Add Windows CI and publish assets only after actual PNG decoding, geometry,
-   dependency resolution and isolated binary tests pass on Windows. Decide
-   Windows theme names based on that calibration; do not silently alias the
-   current macOS Liquid Glass names to guessed Windows styles.
+## Verification
 
-## Fixtures and required evidence
+`swift test` and `scripts/smoke.py` run the same acceptance contract on both
+platforms: PNG signature, CRCs and real decoding, exact dimensions and limits,
+common-page paint, selected page, subform-local coordinates and clipping,
+embedded pictures, French XLIFF, repeated identical bytes, unchanged inputs,
+explicit errors, and the other platform's theme names rejected. The packaged
+binary runs from a directory containing only its archive contents with an empty
+`PATH`. Creating the symlink-alias case needs Developer Mode or the symlink
+privilege on Windows; without it, smoke skips that one case.
 
-Use this repository's `simple.4DForm` and the pinned dependency's self-authored
-`FormStaticProject` and `FormBenchmarkProject` fixtures. Keep entire projects
-when testing CSS, pictures, JSON pointers, XLIFF, inheritance and subforms.
-The scripts resolve these fixtures from `.build/checkouts/4d-ql`; a Windows
-harness may locate the pinned checkout differently without copying calibrated
-code. No external HDI/customer forms or Apple SF Pro fonts may be redistributed.
+Determinism means identical bytes on the same Windows build, fonts, WebView2
+Runtime version and CLI build. Evergreen WebView2 updates may change
+anti-aliasing slightly; they do not change geometry.
 
-Match the macOS acceptance contract, not necessarily macOS native appearance:
-verify PNG signature, chunk CRCs and actual decompression/decoding, exact
-dimension/scale limits, common-page paint order, selected page visibility,
-paint at known coordinates, subform-local coordinates and clipping, image
-placement, static CSS/JSON references and French XLIFF. Test repeated bytes on
-the same Windows environment; document OS/font-dependent differences.
-Hash input/project files before and after. Test missing/malformed inputs,
-unavailable themes/pages, bad output paths, nonfinite/unbounded scale,
-timeout, content-process failure, locked destinations and no-network behavior.
+## Building
 
-Finally copy the binary plus fixture project into a directory without source,
-4D, Quick Look, SwiftPM or developer `PATH`; run on each published architecture.
-Record dynamic runtime/WebView2 requirements explicitly. Windows native
-calibration and runtime validation remain open work, not a macOS release gate.
+Install Swift for Windows (6.x) with Visual Studio C++ build tools and a
+Windows 10/11 SDK, then run `scripts\fetch-webview2.ps1`, `swift test` and
+`scripts\build-windows.ps1`. The build bundles exactly the Swift/MSVC runtime
+DLLs that `fourdform.exe` transitively imports (found with `dumpbin
+/dependents`), plus the WebView2 SDK's BSD-3-Clause notice. Asset names in
+`release.json` are stable; coordinate any change with `miyako/skills`.

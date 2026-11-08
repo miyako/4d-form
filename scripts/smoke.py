@@ -13,6 +13,16 @@ import tempfile
 import zlib
 
 ROOT = Path(__file__).resolve().parent.parent
+WINDOWS = sys.platform == "win32"
+# Host-platform theme names; the other platform's names must be rejected (no aliasing).
+if WINDOWS:
+    LIGHT, DARK = "classic", "fluent-dark"
+    THEMES = ("classic", "fluent-light", "fluent-dark")
+    FOREIGN = ("classic-light", "classic-dark", "liquid-glass-light", "liquid-glass-dark")
+else:
+    LIGHT, DARK = "classic-light", "classic-dark"
+    THEMES = ("classic-light", "classic-dark", "liquid-glass-light", "liquid-glass-dark")
+    FOREIGN = ("classic", "fluent-light", "fluent-dark")
 
 
 def decode_png(path):
@@ -83,8 +93,12 @@ def main():
     assert "MIT License" in license_text and "FourDFileKit/FourDRender" in license_text
     with tempfile.TemporaryDirectory(prefix="fourdform-smoke-") as name:
         work = Path(name)
-        binary = work / "fourdform"
+        binary = work / executable.name
         shutil.copy2(executable, binary)
+        if WINDOWS:
+            # Release archives ship the Swift runtime DLLs beside the executable.
+            for library in executable.parent.glob("*.dll"):
+                shutil.copy2(library, work / library.name)
         shutil.copy2(ROOT / "Tests/FormImageTests/Fixtures/simple.4DForm", work / "simple.4DForm")
         environment = {**os.environ, "PATH": ""}
 
@@ -107,10 +121,14 @@ def main():
         assert decode_png(work / "scaled.png")[0] == (480, 320)
         run("simple.4DForm", "-o", "bounded.png", "--scale", 4, "--max-dimension", 120)
         assert decode_png(work / "bounded.png")[0] == (120, 80)
-        for theme in ("classic-light", "classic-dark", "liquid-glass-light", "liquid-glass-dark"):
+        for theme in THEMES:
             run("simple.4DForm", "--theme", theme, "-o", theme + ".png")
             assert decode_png(work / (theme + ".png"))[0] == (240, 160)
-        assert (work / "classic-light.png").read_bytes() != (work / "classic-dark.png").read_bytes()
+        assert (work / (LIGHT + ".png")).read_bytes() != (work / (DARK + ".png")).read_bytes()
+        if WINDOWS:
+            assert (work / "fluent-light.png").read_bytes() != (work / "fluent-dark.png").read_bytes()
+        for theme in FOREIGN:
+            run("simple.4DForm", "--theme", theme, status=2)
         run("simple.4DForm", "--page", 2, "-o", "page2.png")
         _, page2 = decode_png(work / "page2.png")
         assert page2[110][440:444] == bytes([0, 255, 0, 255]), "Selected page geometry"
@@ -141,12 +159,18 @@ def main():
         (work / "retained.png").write_bytes(b"prior output")
         run("malformed.4DForm", "-o", "retained.png", status=1)
         assert (work / "retained.png").read_bytes() == b"prior output"
-        (work / "input-alias.png").symlink_to(work / "simple.4DForm")
-        run("simple.4DForm", "-o", "input-alias.png", status=2)
+        try:
+            (work / "input-alias.png").symlink_to(work / "simple.4DForm")
+        except OSError:
+            assert WINDOWS, "Symlinks are required on macOS"  # Windows needs developer mode/privilege.
+        else:
+            run("simple.4DForm", "-o", "input-alias.png", status=2)
         (work / "forced.4DForm").write_text(json.dumps({"colorScheme": "dark", "pages": [{"objects": {}}, {"objects": {}}]}))
-        run("forced.4DForm", "--theme", "classic-light", status=1)
-        run("forced.4DForm", "--theme", "classic-dark", "-o", "forced.png")
+        run("forced.4DForm", "--theme", LIGHT, status=1)
+        run("forced.4DForm", "--theme", DARK, "-o", "forced.png")
         decode_png(work / "forced.png")
+        run("forced.4DForm", "-o", "forced-default.png")
+        assert (work / "forced.png").read_bytes() == (work / "forced-default.png").read_bytes()
         assert before["simple.4DForm"] == hashlib.sha256((work / "simple.4DForm").read_bytes()).hexdigest()
         shared = ROOT / ".build/checkouts/4d-ql/Tests/FourDFileKitTests/Fixtures"
         assert shared.is_dir(), "Resolve pinned shared dependency before corpus smoke"

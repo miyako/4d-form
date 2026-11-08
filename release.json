@@ -12,6 +12,24 @@
       "checksumFile": "SHA256SUMS",
       "signed": "ad-hoc",
       "notarized": false
+    },
+    "windows-x64": {
+      "archive": "fourdform-windows-x64.zip",
+      "binary": "fourdform.exe",
+      "minimumOS": "10.0",
+      "architectures": ["x86_64"],
+      "checksumFile": "SHA256SUMS",
+      "signed": false,
+      "runtimeRequirements": ["Microsoft Edge WebView2 Runtime (Evergreen)"]
+    },
+    "windows-arm64": {
+      "archive": "fourdform-windows-arm64.zip",
+      "binary": "fourdform.exe",
+      "minimumOS": "10.0",
+      "architectures": ["arm64"],
+      "checksumFile": "SHA256SUMS",
+      "signed": false,
+      "runtimeRequirements": ["Microsoft Edge WebView2 Runtime (Evergreen)"]
     }
   }
 }

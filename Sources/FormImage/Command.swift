@@ -25,6 +25,33 @@ public struct ImageSize: Equatable {
 }
 
 public struct ImageCommand {
+    #if os(Windows)
+    public static let platform = FormPlatform.windows
+    /// Windows names only; macOS appearance names are deliberately not aliased.
+    public static let themes: [(name: String, theme: FormTheme)] = [
+        ("classic", .windowsClassic), ("fluent-light", .fluentLight), ("fluent-dark", .fluentDark),
+    ]
+    static let themeHelp = """
+      --theme NAME           classic (default; fluent-dark if form forces dark),
+                             fluent-light, fluent-dark
+    """
+    static let platformLine = "Static Windows reference preview; requires the Microsoft Edge WebView2 Runtime,\nnot 4D."
+    static func defaultTheme(dark: Bool) -> FormTheme { dark ? .fluentDark : .windowsClassic }
+    #else
+    public static let platform = FormPlatform.macOS
+    public static let themes: [(name: String, theme: FormTheme)] = [
+        ("classic-light", .classicLight), ("classic-dark", .classicDark),
+        ("liquid-glass-light", .glassLight), ("glass-light", .glassLight),
+        ("liquid-glass-dark", .glassDark), ("glass-dark", .glassDark),
+    ]
+    static let themeHelp = """
+      --theme NAME           classic-light (default; dark if form forces it), classic-dark,
+                             liquid-glass-light, liquid-glass-dark
+    """
+    static let platformLine = "Static macOS reference preview; no 4D or Quick Look installation required."
+    static func defaultTheme(dark: Bool) -> FormTheme { dark ? .classicDark : .classicLight }
+    #endif
+
     public static let version = "0.1.0"
     public static let license = """
     fourdform and its shared FourDFileKit/FourDRender libraries
@@ -53,8 +80,7 @@ public struct ImageCommand {
     public static let usage = """
     usage: fourdform [options] [--] path.4DForm
       --output, -o PATH      PNG destination (default: INPUT.preview.png)
-      --theme NAME           classic-light (default; dark if form forces it), classic-dark,
-                             liquid-glass-light, liquid-glass-dark
+    \(themeHelp)
       --page N               Nonnegative page number (default: 1, else first)
       --language BCP47       Localization preference; repeat in priority order
                              (default: en, independent of system locale)
@@ -63,7 +89,7 @@ public struct ImageCommand {
       --help, -h             Show help
       --version              Show version
       --license              Show embedded product/shared-library MIT notice
-    Static macOS reference preview; no 4D or Quick Look installation required.
+    \(platformLine)
     Exit status: 0 success/help, 2 usage error, 1 analysis/render/write error.
     """
 
@@ -95,13 +121,10 @@ public struct ImageCommand {
                 case "--output", "-o": destination = try value(argument)
                 case "--theme":
                     let name = try value(argument)
-                    switch name {
-                    case "classic-light": options.initialTheme = .classicLight
-                    case "classic-dark": options.initialTheme = .classicDark
-                    case "liquid-glass-light", "glass-light": options.initialTheme = .glassLight
-                    case "liquid-glass-dark", "glass-dark": options.initialTheme = .glassDark
-                    default: throw CommandError("Unknown theme: \(name).")
+                    guard let match = Self.themes.first(where: { $0.name == name }) else {
+                        throw CommandError("Unknown theme: \(name).")
                     }
+                    options.initialTheme = match.theme
                 case "--page":
                     guard let page = Int(try value(argument)), page >= 0 else {
                         throw CommandError("--page must be a nonnegative integer.")
@@ -145,11 +168,11 @@ public struct ImageCommand {
 
     public func render() throws -> FormRenderResult {
         let renderer = FormRenderer()
-        let form = try renderer.analyze(url: input, preferredLanguages: languages)
+        let form = try renderer.analyze(url: input, preferredLanguages: languages, platform: Self.platform)
         var selected = options
         if selected.initialTheme == nil {
-            selected.initialTheme = form.properties["colorScheme"]?.string == "dark" ? .classicDark : .classicLight
+            selected.initialTheme = Self.defaultTheme(dark: form.properties["colorScheme"]?.string == "dark")
         }
-        return try renderer.render(form: form, options: selected)
+        return try renderer.render(form: form, options: selected, platform: Self.platform)
     }
 }

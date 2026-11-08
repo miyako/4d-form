@@ -1,7 +1,37 @@
 import XCTest
+#if os(macOS)
 import AppKit
 import ImageIO
+#endif
 @testable import FormImage
+
+/// Platform raster adapter under test (AppKit/WebKit on macOS, WebView2 on Windows).
+@MainActor private func rasterize(_ html: String, scale: Double = 1, maximum: Int = 2048,
+                                  timeout: TimeInterval = 30) throws -> Data {
+    #if os(macOS)
+    _ = NSApplication.shared
+    return try MacRasterizer().png(html: html, scale: scale, maximum: maximum, timeout: timeout)
+    #else
+    return try WindowsRasterizer().png(html: html, scale: scale, maximum: maximum, timeout: timeout)
+    #endif
+}
+
+/// Decoded PNG as tightly packed RGBA rows.
+private func pixels(_ png: Data) throws -> (width: Int, height: Int, rgba: [UInt8]) {
+    #if os(macOS)
+    let source = try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil))
+    let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
+    var rgba = [UInt8](repeating: 0, count: image.width * image.height * 4)
+    let context = try XCTUnwrap(CGContext(data: &rgba, width: image.width, height: image.height,
+                                          bitsPerComponent: 8, bytesPerRow: image.width * 4,
+                                          space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+    return (image.width, image.height, rgba)
+    #else
+    return try WindowsRasterizer.decodeRGBA(png)
+    #endif
+}
 
 final class FormImageTests: XCTestCase {
     func testLimitsAndArguments() throws {
@@ -12,7 +42,8 @@ final class FormImageTests: XCTestCase {
         XCTAssertEqual(fit.height, 1024)
         for args in [[], ["x.json"], ["--scale", "nan", "x.4DForm"], ["--scale", "5", "x.4DForm"],
                      ["--max-dimension", "4097", "x.4DForm"], ["--page", "-1", "x.4DForm"],
-                     ["--theme", "windows", "x.4DForm"], ["--output", "x.4DForm", "x.4DForm"],
+                     ["--theme", "windows", "x.4DForm"], ["--theme", "dark", "x.4DForm"],
+                     ["--output", "x.4DForm", "x.4DForm"],
                      ["--language", "", "x.4DForm"], ["x.4DForm", "y.4DForm"]] {
             XCTAssertThrowsError(try ImageCommand(args))
         }
@@ -21,39 +52,58 @@ final class FormImageTests: XCTestCase {
         XCTAssertTrue(command.output.path.hasSuffix("-form.preview.png"))
     }
 
+    func testThemeNamesArePlatformSpecific() throws {
+        #if os(Windows)
+        let accepted: [(String, FormTheme)] = [("classic", .windowsClassic), ("fluent-light", .fluentLight),
+                                               ("fluent-dark", .fluentDark)]
+        let foreign = ["classic-light", "classic-dark", "liquid-glass-light", "liquid-glass-dark",
+                       "glass-light", "glass-dark"]
+        XCTAssertEqual(ImageCommand.platform, .windows)
+        #else
+        let accepted: [(String, FormTheme)] = [("classic-light", .classicLight), ("classic-dark", .classicDark),
+                                               ("liquid-glass-light", .glassLight), ("glass-light", .glassLight),
+                                               ("liquid-glass-dark", .glassDark), ("glass-dark", .glassDark)]
+        let foreign = ["classic", "fluent-light", "fluent-dark"]
+        XCTAssertEqual(ImageCommand.platform, .macOS)
+        #endif
+        for (name, theme) in accepted {
+            XCTAssertEqual(try ImageCommand(["--theme", name, "x.4DForm"]).options.initialTheme, theme, name)
+            XCTAssertTrue(ImageCommand.usage.contains(name) || name.hasPrefix("glass-"), name)
+        }
+        for name in foreign {
+            XCTAssertThrowsError(try ImageCommand(["--theme", name, "x.4DForm"]), name)
+        }
+    }
+
     @MainActor func testRealPNGAndDeterminism() throws {
-        _ = NSApplication.shared
         let input = Bundle.module.url(forResource: "simple", withExtension: "4DForm", subdirectory: "Fixtures")!
         let before = try Data(contentsOf: input)
         let command = try ImageCommand([input.path])
         let rendered = try command.render()
-        let first = try MacRasterizer().png(html: rendered.html, scale: 1, maximum: 2048)
-        let second = try MacRasterizer().png(html: rendered.html, scale: 1, maximum: 2048)
+        let first = try rasterize(rendered.html)
+        let second = try rasterize(rendered.html)
         XCTAssertEqual(first, second)
         XCTAssertEqual(Array(first.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
-        let source = try XCTUnwrap(CGImageSourceCreateWithData(first as CFData, nil))
-        let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let image = try pixels(first)
         XCTAssertEqual(image.width, 240)
         XCTAssertEqual(image.height, 160)
-        let bytes = try XCTUnwrap(image.dataProvider?.data) as Data
-        let offset = 20 * image.bytesPerRow + 20 * 4
-        XCTAssertGreaterThan(bytes[offset], 240, "Common-page red rectangle must paint at (20,20)")
-        XCTAssertLessThan(bytes[offset + 1], 20)
-        XCTAssertLessThan(bytes[offset + 2], 20)
+        let offset = (20 * image.width + 20) * 4
+        XCTAssertGreaterThan(image.rgba[offset], 240, "Common-page red rectangle must paint at (20,20)")
+        XCTAssertLessThan(image.rgba[offset + 1], 20)
+        XCTAssertLessThan(image.rgba[offset + 2], 20)
         XCTAssertEqual(try Data(contentsOf: input), before)
-        let scaled = try MacRasterizer().png(html: rendered.html, scale: 2, maximum: 4096)
-        let scaledSource = try XCTUnwrap(CGImageSourceCreateWithData(scaled as CFData, nil))
-        XCTAssertEqual(CGImageSourceCreateImageAtIndex(scaledSource, 0, nil)?.width, 480)
+        let scaled = try rasterize(rendered.html, scale: 2, maximum: 4096)
+        XCTAssertEqual(try pixels(scaled).width, 480)
+        #if os(Windows)
+        XCTAssertEqual(rendered.document.referencePlatform, "Windows")
+        #endif
     }
 
     @MainActor func testRasterFailuresAreExplicitAndBounded() throws {
-        _ = NSApplication.shared
-        XCTAssertThrowsError(try MacRasterizer().png(html: "<html><body>No canvas</body></html>",
-                                                    scale: 1, maximum: 2048)) { error in
+        XCTAssertThrowsError(try rasterize("<html><body>No canvas</body></html>")) { error in
             XCTAssertTrue(String(describing: error).contains("No selected form canvas"))
         }
-        XCTAssertThrowsError(try MacRasterizer().png(html: "<html></html>", scale: 1,
-                                                    maximum: 2048, timeout: 0)) { error in
+        XCTAssertThrowsError(try rasterize("<html></html>", timeout: 0)) { error in
             XCTAssertTrue(error.localizedDescription.contains("timed out"))
         }
         let brokenImage = """
@@ -62,6 +112,6 @@ final class FormImageTests: XCTestCase {
         <svg width="80" height="80"><image href="data:image/png;base64,broken"/></svg>
         </div></div></div></div></body></html>
         """
-        XCTAssertThrowsError(try MacRasterizer().png(html: brokenImage, scale: 1, maximum: 2048))
+        XCTAssertThrowsError(try rasterize(brokenImage))
     }
 }

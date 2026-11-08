@@ -29,7 +29,24 @@ is also self-authored under this repository's MIT license. External HDI forms,
 private native screenshots and downloaded SF Pro fonts are **not** vendored or
 packaged.
 
-Runtime dependencies are Apple system AppKit, CoreText, ImageIO,
+Runtime dependencies on macOS are Apple system AppKit, CoreText, ImageIO,
 UniformTypeIdentifiers and WebKit, plus the Swift runtime supplied by macOS.
+On Windows they are the system Microsoft Edge WebView2 Runtime (Evergreen),
+Windows Imaging Component and the Swift/MSVC runtime DLLs bundled beside
+`fourdform.exe` in the release archive (Apache-2.0 with Runtime Library
+Exception / Microsoft Visual C++ redistributable terms).
+
+## Microsoft WebView2 SDK (build time only)
+
+`scripts/fetch-webview2.ps1` downloads NuGet `Microsoft.Web.WebView2`
+1.0.4314.35, verifies SHA-256
+`90778DEB1B77E36292828B4B5833C9255C27533F40E0DDD55891AE718944EDC4`, and copies
+`WebView2.h`, `WebView2EnvironmentOptions.h`, the per-architecture
+`WebView2LoaderStatic.lib` and its BSD-3-Clause `LICENSE.txt` into the
+git-ignored `Sources/CWebView2Raster/vendor/`. The static loader is linked into
+`fourdform.exe`, so `scripts/build-windows.ps1` ships the notice as
+`WebView2-SDK-LICENSE.txt` in each Windows archive; no WebView2 SDK file is
+committed. Update by changing the
+version and hash together and re-running the Windows build and smoke corpus.
 SwiftPM/source downloads are build-time only. Project dependencies are read
 in-process under ordinary filesystem permissions, without host/XPC/4D access.

@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import FormImage
 import Foundation
 
@@ -32,9 +34,13 @@ func fail(_ error: Error, status: Int32) -> Never {
             for notice in rendered.document.notices {
                 FileHandle.standardError.write(Data("warning: \(notice)\n".utf8))
             }
+            #if os(macOS)
             let app = NSApplication.shared
             app.setActivationPolicy(.prohibited)
             let data = try MacRasterizer().png(html: rendered.html, scale: command.scale, maximum: command.maximum)
+            #else
+            let data = try WindowsRasterizer().png(html: rendered.html, scale: command.scale, maximum: command.maximum)
+            #endif
             try data.write(to: command.output, options: .atomic)
             print(command.output.path)
         } catch { fail(error, status: 1) }

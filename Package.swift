@@ -32,7 +32,7 @@ let package = Package(
     products: [.executable(name: "fourdform", targets: ["FourDFormCLI"])],
     dependencies: [
         .package(url: "https://github.com/miyako/4d-ql.git",
-                 revision: "372c7f80365bfa0be2617b38e6391720d748ad38")
+                 revision: "49dc10ed67a798bfd9ee8d48b9f8cea3a045341b")
     ],
     targets: targets,
     cxxLanguageStandard: .cxx17

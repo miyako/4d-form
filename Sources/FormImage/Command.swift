@@ -32,11 +32,13 @@ public struct ImageCommand {
         ("classic", .windowsClassic), ("fluent-light", .fluentLight), ("fluent-dark", .fluentDark),
     ]
     static let themeHelp = """
-      --theme NAME           classic (default; fluent-dark if form forces dark),
-                             fluent-light, fluent-dark
+      --theme NAME           classic, fluent-light, fluent-dark (default: classic, or
+                             fluent-light if fluentUI is set; fluent-dark if form forces dark)
     """
     static let platformLine = "Static Windows reference preview; requires the Microsoft Edge WebView2 Runtime,\nnot 4D."
-    static func defaultTheme(dark: Bool) -> FormTheme { dark ? .fluentDark : .windowsClassic }
+    static func defaultTheme(dark: Bool, fluent: Bool) -> FormTheme {
+        dark ? .fluentDark : fluent ? .fluentLight : .windowsClassic
+    }
     #else
     public static let platform = FormPlatform.macOS
     public static let themes: [(name: String, theme: FormTheme)] = [
@@ -49,7 +51,7 @@ public struct ImageCommand {
                              liquid-glass-light, liquid-glass-dark
     """
     static let platformLine = "Static macOS reference preview; no 4D or Quick Look installation required."
-    static func defaultTheme(dark: Bool) -> FormTheme { dark ? .classicDark : .classicLight }
+    static func defaultTheme(dark: Bool, fluent: Bool) -> FormTheme { dark ? .classicDark : .classicLight }
     #endif
 
     public static let version = "0.1.0"
@@ -171,8 +173,9 @@ public struct ImageCommand {
         let form = try renderer.analyze(url: input, preferredLanguages: languages, platform: Self.platform)
         var selected = options
         if selected.initialTheme == nil {
-            selected.initialTheme = Self.defaultTheme(dark: form.properties["colorScheme"]?.string == "dark")
+            selected.initialTheme = Self.defaultTheme(dark: form.properties["colorScheme"]?.string == "dark",
+                                                      fluent: form.properties["fluentUI"]?.bool == true)
         }
-        return try renderer.render(form: form, options: selected, platform: Self.platform)
+        return try renderer.render(form: form, options: selected)
     }
 }

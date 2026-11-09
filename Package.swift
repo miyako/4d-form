@@ -21,7 +21,8 @@ targets.append(.target(
 targets += [
     .target(name: "FormImage", dependencies: formImageDependencies),
     .executableTarget(name: "FourDFormCLI", dependencies: ["FormImage"], path: "Sources/fourdform"),
-    .testTarget(name: "FormImageTests", dependencies: ["FormImage"],
+    .testTarget(name: "FormImageTests",
+                dependencies: ["FormImage", .product(name: "FourDFileKit", package: "4d-ql")],
                 resources: [.copy("Fixtures")]),
 ]
 
@@ -31,7 +32,7 @@ let package = Package(
     products: [.executable(name: "fourdform", targets: ["FourDFormCLI"])],
     dependencies: [
         .package(url: "https://github.com/miyako/4d-ql.git",
-                 revision: "42580e8c0d1c1c5506d349c4c2e071c40fc0e02c")
+                 revision: "372c7f80365bfa0be2617b38e6391720d748ad38")
     ],
     targets: targets,
     cxxLanguageStandard: .cxx17

@@ -85,11 +85,11 @@ def hashes(directory):
 def main():
     executable = Path(sys.argv[1]).resolve()
     manifest = json.loads((ROOT / "release.json").read_text())
-    version = subprocess.check_output([str(executable), "--version"], text=True).strip()
+    version = subprocess.check_output([str(executable), "--version"], encoding="utf-8").strip()
     assert version == "fourdform " + manifest["version"]
     assert manifest["tag"] == "v" + manifest["version"]
-    assert "--max-dimension" in subprocess.check_output([str(executable), "--help"], text=True)
-    license_text = subprocess.check_output([str(executable), "--license"], text=True)
+    assert "--max-dimension" in subprocess.check_output([str(executable), "--help"], encoding="utf-8")
+    license_text = subprocess.check_output([str(executable), "--license"], encoding="utf-8")
     assert "MIT License" in license_text and "FourDFileKit/FourDRender" in license_text
     with tempfile.TemporaryDirectory(prefix="fourdform-smoke-") as name:
         work = Path(name)
@@ -104,7 +104,7 @@ def main():
 
         def run(*args, status=0):
             result = subprocess.run([str(binary), *map(str, args)], cwd=work, env=environment,
-                                    capture_output=True, text=True, timeout=45)
+                                    capture_output=True, encoding="utf-8", timeout=45)
             assert result.returncode == status, (args, result.returncode, result.stderr)
             if status:
                 assert "error:" in result.stderr

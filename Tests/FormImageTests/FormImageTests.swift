@@ -4,6 +4,7 @@ import AppKit
 import ImageIO
 #endif
 @testable import FormImage
+import FourDFileKit
 
 /// Platform raster adapter under test (AppKit/WebKit on macOS, WebView2 on Windows).
 @MainActor private func rasterize(_ html: String, scale: Double = 1, maximum: Int = 2048,

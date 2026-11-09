@@ -82,7 +82,7 @@ does not maintain a second vendored build of the renderer.
 |---|---|---|
 | `--output`, `-o` | `INPUT.preview.png` | PNG path; parent directory must exist |
 | `--theme` (macOS) | `classic-light`, or `classic-dark` if form forces dark | `classic-light`, `classic-dark`, `liquid-glass-light`, `liquid-glass-dark`; `glass-light`/`glass-dark` aliases |
-| `--theme` (Windows) | `classic`, or `fluent-dark` if form forces dark | `classic` (Windows Classic, light only), `fluent-light`, `fluent-dark` |
+| `--theme` (Windows) | `classic`; `fluent-light` if form sets `fluentUI`; `fluent-dark` if form forces dark | `classic` (Windows Classic, light only), `fluent-light`, `fluent-dark` |
 | `--page` | page 1, else first | Nonnegative page; page 0 is shared behind other pages |
 | `--language` | `en` | Repeat BCP47 preferences in priority order |
 | `--scale` | `1` | Pixels per form point, finite range 0.1–4 |

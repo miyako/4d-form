@@ -2,3 +2,6 @@
 .swiftpm/
 dist/
 .DS_Store
+Sources/CWebView2Raster/vendor/
+# SwiftPM on Windows writes the test resource bundle plist into the package root.
+/Info.plist

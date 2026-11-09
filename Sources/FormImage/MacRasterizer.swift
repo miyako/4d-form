@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Foundation
 import ImageIO
@@ -45,45 +46,7 @@ import WebKit
     }
 
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        // Work only on trusted, escaped upstream markup. Never evaluate form methods or events.
-        let prepare = """
-        const svg = [...document.querySelectorAll('.form-page > .form-scroll > svg')]
-          .find(s => s.closest('.form-appearance').offsetHeight > 0 &&
-                     s.closest('.form-page').offsetHeight > 0);
-        if (!svg) throw new Error('No selected form canvas in shared renderer output');
-        const width = Number(svg.getAttribute('width'));
-        const height = Number(svg.getAttribute('height'));
-        if (!(width >= 1 && height >= 1 && width <= 8192 && height <= 8192))
-          throw new Error('Invalid shared canvas size');
-        await document.fonts.ready;
-        await Promise.all([...document.querySelectorAll('image')].map(async node => {
-          const image = new Image();
-          image.src = node.getAttribute('href');
-          await image.decode();
-        }));
-        const preview = document.querySelector('.form-preview');
-        const appearance = svg.closest('.form-appearance');
-        for (const node of [...document.querySelectorAll('body style')]) document.head.appendChild(node);
-        document.body.replaceChildren(preview);
-        for (const node of [...preview.children]) {
-          if (node !== appearance && node.tagName !== 'STYLE' && node.tagName !== 'svg') node.remove();
-        }
-        for (const node of [...appearance.children]) {
-          if (!node.contains(svg)) node.remove();
-        }
-        const style = document.createElement('style');
-        style.textContent = `html,body{margin:0!important;padding:0!important;overflow:hidden!important}
-          body *{animation:none!important;transition:none!important}
-          .form-preview,.form-appearance,.form-page,.form-scroll{margin:0!important;
-          padding:0!important;border:0!important;max-width:none!important;max-height:none!important;
-          overflow:visible!important}
-          .form-caption,.form-themes,.form-pages{display:none!important}
-          .form-appearance,.form-page{display:block!important}
-          .form-scroll>svg{display:block!important}`;
-        document.head.appendChild(style);
-        return {width,height};
-        """
-        webView.callAsyncJavaScript(prepare, arguments: [:], in: nil, in: .page) { result in
+        webView.callAsyncJavaScript(CanvasScripts.prepare, arguments: [:], in: nil, in: .page) { result in
             do {
                 guard let size = try result.get() as? [String: Double],
                       let width = size["width"], let height = size["height"] else {
@@ -97,12 +60,7 @@ import WebKit
 
     private func snapshot(_ view: WKWebView, size: ImageSize) {
         view.setFrameSize(NSSize(width: size.width, height: size.height))
-        let script = """
-        const svg = document.querySelector('.form-page > .form-scroll > svg');
-        svg.setAttribute('width', width); svg.setAttribute('height', height);
-        return {width: svg.getBoundingClientRect().width, height: svg.getBoundingClientRect().height};
-        """
-        view.callAsyncJavaScript(script, arguments: ["width": size.width, "height": size.height],
+        view.callAsyncJavaScript(CanvasScripts.resize, arguments: ["width": size.width, "height": size.height],
                                  in: nil, in: .page) { result in
             do { _ = try result.get() }
             catch { self.completion = .failure(error); return }
@@ -145,3 +103,4 @@ import WebKit
         completion = .failure(CommandError("WebKit content process terminated."))
     }
 }
+#endif

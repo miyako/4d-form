@@ -1,4 +1,4 @@
-name: macOS PNG CLI
+name: PNG CLI
 on:
   push:
     branches: [main]
@@ -24,5 +24,38 @@ jobs:
           path: |
             dist/fourdform-macos-universal.tar.xz
             dist/SHA256SUMS
+            dist/release.json
+          if-no-files-found: error
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            arch: x64
+            build_arch: amd64
+          - os: windows-11-arm
+            arch: arm64
+            build_arch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: compnerd/gha-setup-swift@v0.5.1
+        with:
+          swift-version: swift-6.4.2-release
+          swift-build: 6.4.2-RELEASE
+          build_arch: ${{ matrix.build_arch }}
+      - name: Fetch pinned WebView2 SDK
+        run: scripts/fetch-webview2.ps1 -Arch ${{ matrix.arch }}
+      - name: Test
+        run: swift test
+      - name: Build bundled CLI and verify PNG corpus
+        run: scripts/build-windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fourdform-windows-${{ matrix.arch }}
+          path: |
+            dist/fourdform-windows-${{ matrix.arch }}.zip
+            dist/SHA256SUMS.${{ matrix.arch }}
             dist/release.json
           if-no-files-found: error

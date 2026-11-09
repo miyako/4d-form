@@ -1,4 +1,4 @@
-name: Release macOS PNG CLI
+name: Release PNG CLI
 on:
   push:
     tags: ["v*"]
@@ -27,22 +27,65 @@ jobs:
           test "$(dist/fourdform --version)" = "fourdform ${TAG#v}"
       - uses: actions/upload-artifact@v4
         with:
-          name: release-assets
+          name: release-assets-macos
           path: |
             dist/fourdform-macos-universal.tar.xz
             dist/SHA256SUMS
             dist/release.json
           if-no-files-found: error
+  windows:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            arch: x64
+            build_arch: amd64
+          - os: windows-11-arm
+            arch: arm64
+            build_arch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+      - uses: compnerd/gha-setup-swift@v0.5.1
+        with:
+          swift-version: swift-6.4.2-release
+          swift-build: 6.4.2-RELEASE
+          build_arch: ${{ matrix.build_arch }}
+      - run: scripts/fetch-webview2.ps1 -Arch ${{ matrix.arch }}
+      - run: swift test
+      - run: scripts/build-windows.ps1
+      - name: Check release tag
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          if ($env:TAG -ne (Get-Content release.json -Raw | ConvertFrom-Json).tag) { exit 1 }
+          if ((& "dist\fourdform-windows-${{ matrix.arch }}\fourdform.exe" --version) -ne "fourdform $($env:TAG.Substring(1))") { exit 1 }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-windows-${{ matrix.arch }}
+          path: |
+            dist/fourdform-windows-${{ matrix.arch }}.zip
+            dist/SHA256SUMS.${{ matrix.arch }}
+          if-no-files-found: error
   publish:
-    needs: build
+    needs: [build, windows]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: release-assets
+          pattern: release-assets-*
+          merge-multiple: true
           path: artifacts
+      - name: Combine checksums
+        run: |
+          cd artifacts
+          cat SHA256SUMS.x64 SHA256SUMS.arm64 >> SHA256SUMS
+          rm SHA256SUMS.x64 SHA256SUMS.arm64
+          sha256sum -c SHA256SUMS
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
@@ -50,5 +93,6 @@ jobs:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           gh release create "$TAG" --verify-tag --title "$TAG" \
-            --notes "Standalone macOS universal .4DForm to PNG CLI. Ad-hoc signed; not notarized. Windows is handover-only. See README and docs/WINDOWS-HANDOVER.md." \
-            artifacts/fourdform-macos-universal.tar.xz artifacts/SHA256SUMS artifacts/release.json
+            --notes "Standalone .4DForm to PNG CLI. macOS universal: ad-hoc signed, not notarized. Windows x64/arm64: unsigned, requires the Microsoft Edge WebView2 Runtime. See README." \
+            artifacts/fourdform-macos-universal.tar.xz artifacts/fourdform-windows-x64.zip \
+            artifacts/fourdform-windows-arm64.zip artifacts/SHA256SUMS artifacts/release.json

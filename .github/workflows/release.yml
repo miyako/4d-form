@@ -54,7 +54,9 @@ jobs:
           swift-build: 6.4.2-RELEASE
           build_arch: ${{ matrix.build_arch }}
       - run: scripts/fetch-webview2.ps1 -Arch ${{ matrix.arch }}
-      - run: swift test
+      # The image's MSVC STL asserts a newer Clang than the toolchain carries;
+      # see scripts/build-windows.ps1.
+      - run: swift test -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
       - run: scripts/build-windows.ps1
       - name: Check release tag
         env:

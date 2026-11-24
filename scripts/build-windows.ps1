@@ -8,7 +8,15 @@ $Arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
 $Name = "fourdform-windows-$Arch"
 
 & "$PSScriptRoot\fetch-webview2.ps1" -Arch $Arch
-swift build -c release --product fourdform
+
+# Visual Studio's STL asserts the Clang version it is compiled with, and the
+# runner image's MSVC runs ahead of the Clang inside the Swift toolchain: the
+# build fails with `error STL1000: Unexpected compiler version, expected Clang
+# 22 or newer` in a dependency's C++ sources before any of this project's code
+# is checked. Swift does not pass the opt-out by default yet
+# (swiftlang/swift#79709, #79741), so pass it here. Drop it once the
+# toolchain's Clang matches the image's MSVC.
+swift build -c release --product fourdform -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
 if ($LASTEXITCODE) { throw "swift build failed" }
 $Bin = (swift build -c release --show-bin-path).Trim()
 
